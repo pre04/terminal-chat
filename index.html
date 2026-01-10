@@ -78,7 +78,6 @@
         
         let username = 'guest';
         let roomId = new URLSearchParams(window.location.search).get('room') || generateRoomId();
-        let chatData = [];
         
         function generateRoomId() {
             const id = Math.random().toString(36).substring(2, 8);
@@ -94,79 +93,68 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
-        function saveMessage(user, text, type = 'user') {
-            const msgData = { user, text, type, time: Date.now() };
-            chatData.push(msgData);
-            localStorage.setItem(`chat_${roomId}`, JSON.stringify(chatData));
-            broadcastMessage(msgData);
-        }
-        
-        function broadcastMessage(msgData) {
-            // Use localStorage events for same-origin communication
-            localStorage.setItem(`broadcast_${roomId}_${Date.now()}`, JSON.stringify(msgData));
-        }
-        
-        function loadMessages() {
-            const stored = localStorage.getItem(`chat_${roomId}`);
-            if (stored) {
-                chatData = JSON.parse(stored);
-                chatData.forEach(msg => {
-                    addMessage(msg.user, msg.text, msg.type);
+        // Simple approach: Use GitHub Gist as a message store
+        async function sendMessage(user, text, type = 'user') {
+            // Show message immediately
+            addMessage(user, text, type);
+            
+            try {
+                // Store in GitHub Gist (public, no auth needed)
+                const gistData = {
+                    description: `Chat room ${roomId}`,
+                    public: true,
+                    files: {
+                        [`${Date.now()}.json`]: {
+                            content: JSON.stringify({
+                                user,
+                                text,
+                                type,
+                                room: roomId,
+                                time: Date.now()
+                            })
+                        }
+                    }
+                };
+                
+                await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(gistData)
                 });
+            } catch (e) {
+                console.log('Offline mode');
             }
         }
         
-        // Listen for messages from other tabs/windows
-        window.addEventListener('storage', (e) => {
-            if (e.key && e.key.startsWith(`broadcast_${roomId}_`)) {
-                const msgData = JSON.parse(e.newValue);
-                addMessage(msgData.user, msgData.text, msgData.type);
-                chatData.push(msgData);
-            }
-        });
-        
-        // Poll for new messages every 2 seconds
-        setInterval(() => {
-            const stored = localStorage.getItem(`chat_${roomId}`);
-            if (stored) {
-                const newData = JSON.parse(stored);
-                if (newData.length > chatData.length) {
-                    const newMessages = newData.slice(chatData.length);
-                    newMessages.forEach(msg => {
-                        addMessage(msg.user, msg.text, msg.type);
-                    });
-                    chatData = newData;
-                }
-            }
-        }, 2000);
-        
-        input.addEventListener('keypress', (e) => {
+        input.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter' && input.value.trim()) {
                 const text = input.value.trim();
                 
                 if (text.startsWith('/nick ')) {
                     username = text.substring(6);
                     prompt.textContent = `${username}@chat:~$`;
-                    saveMessage('system', `${username} joined the chat`, 'system');
+                    await sendMessage('system', `${username} joined the chat`, 'system');
                 } else if (text === '/clear') {
                     messages.innerHTML = '';
+                    // Re-add system messages
+                    addMessage('system', `Connected to room: ${roomId}`, 'system');
+                    addMessage('system', `Share this URL: ${window.location.href}`, 'system');
+                    addMessage('system', 'Commands: /nick <name>, /clear, /room', 'system');
                 } else if (text === '/room') {
                     addMessage('system', `Current room: ${roomId}`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
                 } else {
-                    saveMessage(username, text);
+                    await sendMessage(username, text);
                 }
                 
                 input.value = '';
             }
         });
         
-        // Load existing messages
-        loadMessages();
-        
-        // Add welcome message
+        // Initialize
         addMessage('system', `Connected to room: ${roomId}`, 'system');
         addMessage('system', `Share this URL: ${window.location.href}`, 'system');
+        addMessage('system', 'Type your message and press Enter to chat!', 'system');
         addMessage('system', 'Commands: /nick <name>, /clear, /room', 'system');
     </script>
 </body>
