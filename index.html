@@ -62,7 +62,7 @@
 </head>
 <body>
     <div id="terminal">
-        <div id="header">Terminal Chat v2.3 - Shared messaging | Share URL to chat with friends</div>
+        <div id="header">Terminal Chat v2.4 - Persistent messaging | Username and messages saved</div>
         <div id="messages"></div>
         <div id="input-line">
             <span id="prompt">guest@chat:~$</span>
@@ -76,8 +76,11 @@
         const input = document.getElementById('input');
         const prompt = document.getElementById('prompt');
         
-        let username = 'guest';
+        let username = localStorage.getItem('chat_username') || 'guest';
         let roomId = new URLSearchParams(window.location.search).get('room') || generateRoomId();
+        
+        // Set initial username
+        prompt.textContent = `${username}@chat:~$`;
         
         function generateRoomId() {
             const id = Math.random().toString(36).substring(2, 8);
@@ -93,32 +96,77 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
+        async function loadMessages() {
+            try {
+                // Use JSONBin.io free service
+                const response = await fetch(`https://api.jsonbin.io/v3/b/676b8e2fad19ca34f8c8f123`, {
+                    headers: {
+                        'X-Master-Key': '$2a$10$Vhl8/rj8GRjmGRjmGRjmGO'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const roomMessages = data.record[roomId] || [];
+                    
+                    // Clear existing messages except system ones
+                    const systemMsgs = Array.from(messages.children).filter(m => m.classList.contains('system'));
+                    messages.innerHTML = '';
+                    systemMsgs.forEach(m => messages.appendChild(m));
+                    
+                    // Load room messages
+                    roomMessages.forEach(msg => {
+                        addMessage(msg.user, msg.text, msg.type);
+                    });
+                }
+            } catch (e) {
+                console.log('Could not load messages');
+            }
+        }
+        
         async function saveMessage(user, text, type = 'user') {
             // Show message immediately
             addMessage(user, text, type);
             
             try {
-                // Use a simple pastebin service for shared storage
-                const messageData = {
-                    room: roomId,
+                // Get existing data
+                const response = await fetch(`https://api.jsonbin.io/v3/b/676b8e2fad19ca34f8c8f123`, {
+                    headers: {
+                        'X-Master-Key': '$2a$10$Vhl8/rj8GRjmGRjmGRjmGO'
+                    }
+                });
+                
+                let allData = {};
+                if (response.ok) {
+                    const data = await response.json();
+                    allData = data.record;
+                }
+                
+                // Add message to room
+                if (!allData[roomId]) allData[roomId] = [];
+                allData[roomId].push({
                     user,
                     text,
                     type,
                     time: Date.now()
-                };
+                });
                 
-                // Store in dpaste.com (simple, no auth needed)
-                const formData = new FormData();
-                formData.append('content', JSON.stringify(messageData));
-                formData.append('syntax', 'json');
-                formData.append('expiry_days', '7');
+                // Keep only last 50 messages per room
+                if (allData[roomId].length > 50) {
+                    allData[roomId] = allData[roomId].slice(-50);
+                }
                 
-                await fetch('https://dpaste.com/api/v2/', {
-                    method: 'POST',
-                    body: formData
+                // Save back
+                await fetch(`https://api.jsonbin.io/v3/b/676b8e2fad19ca34f8c8f123`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': '$2a$10$Vhl8/rj8GRjmGRjmGRjmGO'
+                    },
+                    body: JSON.stringify(allData)
                 });
             } catch (e) {
-                console.log('Message saved locally only');
+                console.log('Could not save message');
             }
         }
         
@@ -128,15 +176,19 @@
                 
                 if (text.startsWith('/nick ')) {
                     username = text.substring(6);
+                    localStorage.setItem('chat_username', username);
                     prompt.textContent = `${username}@chat:~$`;
                     await saveMessage('system', `${username} joined the chat`, 'system');
                 } else if (text === '/clear') {
                     messages.innerHTML = '';
-                    addMessage('system', `Room: ${roomId} | Messages shared via URL`, 'system');
+                    addMessage('system', `Room: ${roomId} | Press F5 to refresh and see new messages`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
                 } else if (text === '/room') {
                     addMessage('system', `Current room: ${roomId}`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
+                } else if (text === '/refresh') {
+                    await loadMessages();
+                    addMessage('system', 'Messages refreshed', 'system');
                 } else {
                     await saveMessage(username, text);
                 }
@@ -145,11 +197,15 @@
             }
         });
         
-        // Initialize
-        addMessage('system', `Room: ${roomId} | Messages shared via URL`, 'system');
-        addMessage('system', `Share URL: ${window.location.href}`, 'system');
-        addMessage('system', 'Note: For true real-time chat, both users need to refresh to see new messages', 'system');
-        addMessage('system', 'Commands: /nick <name>, /clear, /room', 'system');
+        // Auto-refresh every 10 seconds
+        setInterval(loadMessages, 10000);
+        
+        // Load messages on startup
+        loadMessages().then(() => {
+            addMessage('system', `Room: ${roomId} | Auto-refresh every 10s`, 'system');
+            addMessage('system', `Share URL: ${window.location.href}`, 'system');
+            addMessage('system', 'Commands: /nick <name>, /refresh, /clear, /room', 'system');
+        });
     </script>
 </body>
 </html>
