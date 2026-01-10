@@ -62,7 +62,7 @@
 </head>
 <body>
     <div id="terminal">
-        <div id="header">Terminal Chat v2.1 - Pull-based messaging | Refresh to see new messages</div>
+        <div id="header">Terminal Chat v2.2 - Private local storage | Messages stay on your device</div>
         <div id="messages"></div>
         <div id="input-line">
             <span id="prompt">guest@chat:~$</span>
@@ -78,7 +78,6 @@
         
         let username = 'guest';
         let roomId = new URLSearchParams(window.location.search).get('room') || generateRoomId();
-        let gistId = null;
         
         function generateRoomId() {
             const id = Math.random().toString(36).substring(2, 8);
@@ -94,118 +93,71 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
-        async function loadMessages() {
-            try {
-                // Try to find existing gist for this room
-                const response = await fetch(`https://api.github.com/gists`);
-                const gists = await response.json();
-                
-                const roomGist = gists.find(g => g.description === `chat-${roomId}`);
-                if (roomGist) {
-                    gistId = roomGist.id;
-                    const gistResponse = await fetch(`https://api.github.com/gists/${gistId}`);
-                    const gistData = await gistResponse.json();
-                    
-                    const chatFile = gistData.files['messages.json'];
-                    if (chatFile) {
-                        const chatMessages = JSON.parse(chatFile.content);
-                        chatMessages.forEach(msg => {
-                            addMessage(msg.user, msg.text, msg.type);
-                        });
-                    }
-                }
-            } catch (e) {
-                console.log('No existing messages found');
-            }
-        }
-        
-        async function saveMessage(user, text, type = 'user') {
+        function saveMessage(user, text, type = 'user') {
             // Show message immediately
             addMessage(user, text, type);
             
-            try {
-                // Load existing messages
-                let existingMessages = [];
-                if (gistId) {
-                    const response = await fetch(`https://api.github.com/gists/${gistId}`);
-                    const gistData = await response.json();
-                    const chatFile = gistData.files['messages.json'];
-                    if (chatFile) {
-                        existingMessages = JSON.parse(chatFile.content);
-                    }
-                }
-                
-                // Add new message
-                existingMessages.push({
-                    user,
-                    text,
-                    type,
-                    time: Date.now()
-                });
-                
-                const gistData = {
-                    description: `chat-${roomId}`,
-                    public: true,
-                    files: {
-                        'messages.json': {
-                            content: JSON.stringify(existingMessages, null, 2)
-                        }
-                    }
-                };
-                
-                if (gistId) {
-                    // Update existing gist
-                    await fetch(`https://api.github.com/gists/${gistId}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(gistData)
-                    });
-                } else {
-                    // Create new gist
-                    const response = await fetch('https://api.github.com/gists', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(gistData)
-                    });
-                    const newGist = await response.json();
-                    gistId = newGist.id;
-                }
-            } catch (e) {
-                console.log('Could not save message:', e);
-            }
+            // Save to localStorage (private to this browser)
+            const chatKey = `chat_${roomId}`;
+            let chatData = JSON.parse(localStorage.getItem(chatKey) || '[]');
+            chatData.push({
+                user,
+                text,
+                type,
+                time: Date.now()
+            });
+            localStorage.setItem(chatKey, JSON.stringify(chatData));
         }
         
-        input.addEventListener('keypress', async (e) => {
+        function loadMessages() {
+            const chatKey = `chat_${roomId}`;
+            const chatData = JSON.parse(localStorage.getItem(chatKey) || '[]');
+            chatData.forEach(msg => {
+                addMessage(msg.user, msg.text, msg.type);
+            });
+        }
+        
+        input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && input.value.trim()) {
                 const text = input.value.trim();
                 
                 if (text.startsWith('/nick ')) {
                     username = text.substring(6);
                     prompt.textContent = `${username}@chat:~$`;
-                    await saveMessage('system', `${username} joined the chat`, 'system');
+                    saveMessage('system', `${username} joined the chat`, 'system');
                 } else if (text === '/clear') {
                     messages.innerHTML = '';
-                    addMessage('system', `Room: ${roomId} | Refresh page to see new messages`, 'system');
+                    localStorage.removeItem(`chat_${roomId}`);
+                    addMessage('system', `Room: ${roomId} | Private local storage`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
                 } else if (text === '/room') {
                     addMessage('system', `Current room: ${roomId}`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
-                } else if (text === '/refresh') {
-                    location.reload();
+                } else if (text === '/export') {
+                    const chatData = JSON.parse(localStorage.getItem(`chat_${roomId}`) || '[]');
+                    const blob = new Blob([JSON.stringify(chatData, null, 2)], {type: 'application/json'});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `chat_${roomId}.json`;
+                    a.click();
+                    addMessage('system', 'Chat exported to file', 'system');
                 } else {
-                    await saveMessage(username, text);
+                    saveMessage(username, text);
                 }
                 
                 input.value = '';
             }
         });
         
-        // Load messages on startup
-        loadMessages().then(() => {
-            addMessage('system', `Room: ${roomId} | Refresh page to see new messages`, 'system');
-            addMessage('system', `Share URL: ${window.location.href}`, 'system');
-            addMessage('system', 'Commands: /nick <name>, /refresh, /clear, /room', 'system');
-        });
+        // Load existing messages
+        loadMessages();
+        
+        // Add welcome messages
+        addMessage('system', `Room: ${roomId} | Private local storage`, 'system');
+        addMessage('system', `Share URL: ${window.location.href}`, 'system');
+        addMessage('system', 'Messages are stored privately on your device only', 'system');
+        addMessage('system', 'Commands: /nick <name>, /export, /clear, /room', 'system');
     </script>
 </body>
 </html>
