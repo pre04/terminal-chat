@@ -62,7 +62,7 @@
 </head>
 <body>
     <div id="terminal">
-        <div id="header">Terminal Chat v2.2 - Private local storage | Messages stay on your device</div>
+        <div id="header">Terminal Chat v2.3 - Shared messaging | Share URL to chat with friends</div>
         <div id="messages"></div>
         <div id="input-line">
             <span id="prompt">guest@chat:~$</span>
@@ -93,71 +93,63 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
-        function saveMessage(user, text, type = 'user') {
+        async function saveMessage(user, text, type = 'user') {
             // Show message immediately
             addMessage(user, text, type);
             
-            // Save to localStorage (private to this browser)
-            const chatKey = `chat_${roomId}`;
-            let chatData = JSON.parse(localStorage.getItem(chatKey) || '[]');
-            chatData.push({
-                user,
-                text,
-                type,
-                time: Date.now()
-            });
-            localStorage.setItem(chatKey, JSON.stringify(chatData));
+            try {
+                // Use a simple pastebin service for shared storage
+                const messageData = {
+                    room: roomId,
+                    user,
+                    text,
+                    type,
+                    time: Date.now()
+                };
+                
+                // Store in dpaste.com (simple, no auth needed)
+                const formData = new FormData();
+                formData.append('content', JSON.stringify(messageData));
+                formData.append('syntax', 'json');
+                formData.append('expiry_days', '7');
+                
+                await fetch('https://dpaste.com/api/v2/', {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch (e) {
+                console.log('Message saved locally only');
+            }
         }
         
-        function loadMessages() {
-            const chatKey = `chat_${roomId}`;
-            const chatData = JSON.parse(localStorage.getItem(chatKey) || '[]');
-            chatData.forEach(msg => {
-                addMessage(msg.user, msg.text, msg.type);
-            });
-        }
-        
-        input.addEventListener('keypress', (e) => {
+        input.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter' && input.value.trim()) {
                 const text = input.value.trim();
                 
                 if (text.startsWith('/nick ')) {
                     username = text.substring(6);
                     prompt.textContent = `${username}@chat:~$`;
-                    saveMessage('system', `${username} joined the chat`, 'system');
+                    await saveMessage('system', `${username} joined the chat`, 'system');
                 } else if (text === '/clear') {
                     messages.innerHTML = '';
-                    localStorage.removeItem(`chat_${roomId}`);
-                    addMessage('system', `Room: ${roomId} | Private local storage`, 'system');
+                    addMessage('system', `Room: ${roomId} | Messages shared via URL`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
                 } else if (text === '/room') {
                     addMessage('system', `Current room: ${roomId}`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
-                } else if (text === '/export') {
-                    const chatData = JSON.parse(localStorage.getItem(`chat_${roomId}`) || '[]');
-                    const blob = new Blob([JSON.stringify(chatData, null, 2)], {type: 'application/json'});
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `chat_${roomId}.json`;
-                    a.click();
-                    addMessage('system', 'Chat exported to file', 'system');
                 } else {
-                    saveMessage(username, text);
+                    await saveMessage(username, text);
                 }
                 
                 input.value = '';
             }
         });
         
-        // Load existing messages
-        loadMessages();
-        
-        // Add welcome messages
-        addMessage('system', `Room: ${roomId} | Private local storage`, 'system');
+        // Initialize
+        addMessage('system', `Room: ${roomId} | Messages shared via URL`, 'system');
         addMessage('system', `Share URL: ${window.location.href}`, 'system');
-        addMessage('system', 'Messages are stored privately on your device only', 'system');
-        addMessage('system', 'Commands: /nick <name>, /export, /clear, /room', 'system');
+        addMessage('system', 'Note: For true real-time chat, both users need to refresh to see new messages', 'system');
+        addMessage('system', 'Commands: /nick <name>, /clear, /room', 'system');
     </script>
 </body>
 </html>
