@@ -62,7 +62,7 @@
 </head>
 <body>
     <div id="terminal">
-        <div id="header">Terminal Chat v1.0 - Share this URL to invite friends</div>
+        <div id="header">Terminal Chat v2.0 - Real-time messaging | Share this URL to invite friends</div>
         <div id="messages"></div>
         <div id="input-line">
             <span id="prompt">guest@chat:~$</span>
@@ -77,7 +77,44 @@
         const prompt = document.getElementById('prompt');
         
         let username = 'guest';
-        let chatData = JSON.parse(localStorage.getItem('terminalChat') || '[]');
+        let roomId = new URLSearchParams(window.location.search).get('room') || generateRoomId();
+        let ws = null;
+        
+        function generateRoomId() {
+            const id = Math.random().toString(36).substring(2, 8);
+            window.history.replaceState({}, '', `?room=${id}`);
+            return id;
+        }
+        
+        function connectWebSocket() {
+            // Using a free WebSocket service
+            ws = new WebSocket('wss://socketsbay.com/wss/v2/1/' + roomId + '/');
+            
+            ws.onopen = () => {
+                addMessage('system', `Connected to room: ${roomId}`, 'system');
+                addMessage('system', `Share this URL: ${window.location.href}`, 'system');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.user && data.text) {
+                        addMessage(data.user, data.text, data.type || 'user');
+                    }
+                } catch (e) {
+                    // Ignore non-JSON messages
+                }
+            };
+            
+            ws.onclose = () => {
+                addMessage('system', 'Disconnected. Trying to reconnect...', 'system');
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onerror = () => {
+                addMessage('system', 'Connection error. Retrying...', 'system');
+            };
+        }
         
         function addMessage(user, text, type = 'user') {
             const msg = document.createElement('div');
@@ -85,19 +122,12 @@
             msg.innerHTML = `<span style="color: #ff6b6b">[${new Date().toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${user}:</span> ${text}`;
             messages.appendChild(msg);
             messages.scrollTop = messages.scrollHeight;
-            
-            chatData.push({ user, text, time: Date.now(), type });
-            localStorage.setItem('terminalChat', JSON.stringify(chatData));
         }
         
-        function loadMessages() {
-            chatData.forEach(msg => {
-                const msgEl = document.createElement('div');
-                msgEl.className = `message ${msg.type}`;
-                msgEl.innerHTML = `<span style="color: #ff6b6b">[${new Date(msg.time).toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${msg.user}:</span> ${msg.text}`;
-                messages.appendChild(msgEl);
-            });
-            messages.scrollTop = messages.scrollHeight;
+        function sendMessage(user, text, type = 'user') {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ user, text, type }));
+            }
         }
         
         input.addEventListener('keypress', (e) => {
@@ -107,26 +137,26 @@
                 if (text.startsWith('/nick ')) {
                     username = text.substring(6);
                     prompt.textContent = `${username}@chat:~$`;
-                    addMessage('system', `Username changed to ${username}`, 'system');
+                    sendMessage('system', `${username} joined the chat`, 'system');
                 } else if (text === '/clear') {
                     messages.innerHTML = '';
-                    chatData = [];
-                    localStorage.removeItem('terminalChat');
+                } else if (text === '/room') {
+                    addMessage('system', `Current room: ${roomId}`, 'system');
+                    addMessage('system', `Share URL: ${window.location.href}`, 'system');
                 } else {
-                    addMessage(username, text);
+                    sendMessage(username, text);
                 }
                 
                 input.value = '';
             }
         });
         
-        // Load existing messages
-        loadMessages();
+        // Connect to WebSocket
+        connectWebSocket();
         
         // Add welcome message
-        if (chatData.length === 0) {
-            addMessage('system', 'Welcome to Terminal Chat! Type /nick <name> to change username, /clear to clear chat', 'system');
-        }
+        addMessage('system', 'Terminal Chat v2.0 - Real-time messaging enabled', 'system');
+        addMessage('system', 'Commands: /nick <name>, /clear, /room', 'system');
     </script>
 </body>
 </html>

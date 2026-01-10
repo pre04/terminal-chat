@@ -1,28 +1,28 @@
-# Terminal Chat
+# Terminal Chat v2.0
 
-A minimal terminal-style chat application with a retro green-on-black aesthetic.
+A minimal terminal-style chat application with real-time messaging and unique room URLs.
 
 ## Features
 - Terminal-like UI with green text on black background
-- Real-time messaging (session-based storage)
+- **Real-time messaging** - Chat with friends instantly
+- **Unique room URLs** - Each session gets a unique room ID
 - Username customization with `/nick <name>`
-- Clear chat with `/clear`
-- Responsive design
+- Clear local chat with `/clear`
+- Room info with `/room`
 
 ## Usage
-1. Open `index.html` in a browser
-2. Share the URL with friends to chat
-3. Type messages and press Enter
-4. Use `/nick <username>` to change your name
-
-## Hosting Options (Free)
-- **Netlify**: Drag and drop the folder to netlify.com
-- **Vercel**: Connect your GitHub repo to vercel.com
-- **GitHub Pages**: Push to GitHub and enable Pages
-- **Surge.sh**: Run `npx surge` in the folder
+1. Visit https://pre04.github.io/terminal-chat/
+2. App automatically creates a unique room URL (e.g., `?room=abc123`)
+3. Share the full URL with friends to join the same chat room
+4. Type messages and press Enter to chat in real-time
 
 ## Commands
 - `/nick <name>` - Change username
-- `/clear` - Clear chat history
+- `/clear` - Clear local chat history
+- `/room` - Show current room info and shareable URL
 
-Chat data is stored locally in browser session.
+## How it works
+- Each visit creates a unique room ID
+- Friends using the same URL join the same chat room
+- Messages are shared in real-time via WebSocket
+- No registration required - just share the URL!
