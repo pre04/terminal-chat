@@ -78,42 +78,12 @@
         
         let username = 'guest';
         let roomId = new URLSearchParams(window.location.search).get('room') || generateRoomId();
-        let ws = null;
+        let chatData = [];
         
         function generateRoomId() {
             const id = Math.random().toString(36).substring(2, 8);
             window.history.replaceState({}, '', `?room=${id}`);
             return id;
-        }
-        
-        function connectWebSocket() {
-            // Using a free WebSocket service
-            ws = new WebSocket('wss://socketsbay.com/wss/v2/1/' + roomId + '/');
-            
-            ws.onopen = () => {
-                addMessage('system', `Connected to room: ${roomId}`, 'system');
-                addMessage('system', `Share this URL: ${window.location.href}`, 'system');
-            };
-            
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.user && data.text) {
-                        addMessage(data.user, data.text, data.type || 'user');
-                    }
-                } catch (e) {
-                    // Ignore non-JSON messages
-                }
-            };
-            
-            ws.onclose = () => {
-                addMessage('system', 'Disconnected. Trying to reconnect...', 'system');
-                setTimeout(connectWebSocket, 3000);
-            };
-            
-            ws.onerror = () => {
-                addMessage('system', 'Connection error. Retrying...', 'system');
-            };
         }
         
         function addMessage(user, text, type = 'user') {
@@ -124,11 +94,51 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
-        function sendMessage(user, text, type = 'user') {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ user, text, type }));
+        function saveMessage(user, text, type = 'user') {
+            const msgData = { user, text, type, time: Date.now() };
+            chatData.push(msgData);
+            localStorage.setItem(`chat_${roomId}`, JSON.stringify(chatData));
+            broadcastMessage(msgData);
+        }
+        
+        function broadcastMessage(msgData) {
+            // Use localStorage events for same-origin communication
+            localStorage.setItem(`broadcast_${roomId}_${Date.now()}`, JSON.stringify(msgData));
+        }
+        
+        function loadMessages() {
+            const stored = localStorage.getItem(`chat_${roomId}`);
+            if (stored) {
+                chatData = JSON.parse(stored);
+                chatData.forEach(msg => {
+                    addMessage(msg.user, msg.text, msg.type);
+                });
             }
         }
+        
+        // Listen for messages from other tabs/windows
+        window.addEventListener('storage', (e) => {
+            if (e.key && e.key.startsWith(`broadcast_${roomId}_`)) {
+                const msgData = JSON.parse(e.newValue);
+                addMessage(msgData.user, msgData.text, msgData.type);
+                chatData.push(msgData);
+            }
+        });
+        
+        // Poll for new messages every 2 seconds
+        setInterval(() => {
+            const stored = localStorage.getItem(`chat_${roomId}`);
+            if (stored) {
+                const newData = JSON.parse(stored);
+                if (newData.length > chatData.length) {
+                    const newMessages = newData.slice(chatData.length);
+                    newMessages.forEach(msg => {
+                        addMessage(msg.user, msg.text, msg.type);
+                    });
+                    chatData = newData;
+                }
+            }
+        }, 2000);
         
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && input.value.trim()) {
@@ -137,25 +147,26 @@
                 if (text.startsWith('/nick ')) {
                     username = text.substring(6);
                     prompt.textContent = `${username}@chat:~$`;
-                    sendMessage('system', `${username} joined the chat`, 'system');
+                    saveMessage('system', `${username} joined the chat`, 'system');
                 } else if (text === '/clear') {
                     messages.innerHTML = '';
                 } else if (text === '/room') {
                     addMessage('system', `Current room: ${roomId}`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
                 } else {
-                    sendMessage(username, text);
+                    saveMessage(username, text);
                 }
                 
                 input.value = '';
             }
         });
         
-        // Connect to WebSocket
-        connectWebSocket();
+        // Load existing messages
+        loadMessages();
         
         // Add welcome message
-        addMessage('system', 'Terminal Chat v2.0 - Real-time messaging enabled', 'system');
+        addMessage('system', `Connected to room: ${roomId}`, 'system');
+        addMessage('system', `Share this URL: ${window.location.href}`, 'system');
         addMessage('system', 'Commands: /nick <name>, /clear, /room', 'system');
     </script>
 </body>
