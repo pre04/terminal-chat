@@ -1,0 +1,13 @@
+{
+  "name": "terminal-chat",
+  "version": "1.0.0",
+  "description": "A minimal terminal-style chat application",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "deploy": "surge . --domain terminal-chat-$(whoami).surge.sh"
+  },
+  "keywords": ["chat", "terminal", "retro", "messaging"],
+  "author": "Your Name",
+  "license": "MIT"
+}

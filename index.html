@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Chat</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #terminal {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        #header {
+            color: #00ff00;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        .message {
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        .user { color: #00ffff; }
+        .system { color: #ffff00; }
+        #input-line {
+            display: flex;
+            align-items: center;
+        }
+        #prompt { color: #00ff00; }
+        #input {
+            background: transparent;
+            border: none;
+            color: #00ff00;
+            font-family: inherit;
+            font-size: inherit;
+            outline: none;
+            flex: 1;
+            margin-left: 5px;
+        }
+        .cursor {
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal">
+        <div id="header">Terminal Chat v1.0 - Share this URL to invite friends</div>
+        <div id="messages"></div>
+        <div id="input-line">
+            <span id="prompt">guest@chat:~$</span>
+            <input type="text" id="input" placeholder="Type message..." autofocus>
+            <span class="cursor">_</span>
+        </div>
+    </div>
+
+    <script>
+        const messages = document.getElementById('messages');
+        const input = document.getElementById('input');
+        const prompt = document.getElementById('prompt');
+        
+        let username = 'guest';
+        let chatData = JSON.parse(localStorage.getItem('terminalChat') || '[]');
+        
+        function addMessage(user, text, type = 'user') {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            msg.innerHTML = `<span style="color: #ff6b6b">[${new Date().toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${user}:</span> ${text}`;
+            messages.appendChild(msg);
+            messages.scrollTop = messages.scrollHeight;
+            
+            chatData.push({ user, text, time: Date.now(), type });
+            localStorage.setItem('terminalChat', JSON.stringify(chatData));
+        }
+        
+        function loadMessages() {
+            chatData.forEach(msg => {
+                const msgEl = document.createElement('div');
+                msgEl.className = `message ${msg.type}`;
+                msgEl.innerHTML = `<span style="color: #ff6b6b">[${new Date(msg.time).toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${msg.user}:</span> ${msg.text}`;
+                messages.appendChild(msgEl);
+            });
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && input.value.trim()) {
+                const text = input.value.trim();
+                
+                if (text.startsWith('/nick ')) {
+                    username = text.substring(6);
+                    prompt.textContent = `${username}@chat:~$`;
+                    addMessage('system', `Username changed to ${username}`, 'system');
+                } else if (text === '/clear') {
+                    messages.innerHTML = '';
+                    chatData = [];
+                    localStorage.removeItem('terminalChat');
+                } else {
+                    addMessage(username, text);
+                }
+                
+                input.value = '';
+            }
+        });
+        
+        // Load existing messages
+        loadMessages();
+        
+        // Add welcome message
+        if (chatData.length === 0) {
+            addMessage('system', 'Welcome to Terminal Chat! Type /nick <name> to change username, /clear to clear chat', 'system');
+        }
+    </script>
+</body>
+</html>
