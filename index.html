@@ -100,14 +100,14 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
-        function saveToLocal(user, text, type = 'user') {
+        function saveToLocal(user, text, type = 'user', time = Date.now()) {
             const chatKey = `chat_${roomId}`;
             let chatData = JSON.parse(localStorage.getItem(chatKey) || '[]');
             chatData.push({
                 user,
                 text,
                 type,
-                time: Date.now()
+                time
             });
             // Keep only last 50 messages
             if (chatData.length > 50) {
@@ -125,11 +125,13 @@
         }
         
         async function sendMessage(user, text, type = 'user') {
+            const time = Date.now();
+            
             // Show message immediately
-            addMessage(user, text, type);
+            addMessage(user, text, type, time);
             
             // Save locally
-            saveToLocal(user, text, type);
+            saveToLocal(user, text, type, time);
             
             // Try to broadcast via simple HTTP request (for demo purposes)
             try {
