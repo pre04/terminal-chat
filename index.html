@@ -88,10 +88,10 @@
             return id;
         }
         
-        function addMessage(user, text, type = 'user') {
+        function addMessage(user, text, type = 'user', time = Date.now()) {
             const msg = document.createElement('div');
             msg.className = `message ${type}`;
-            msg.innerHTML = `<span style="color: #ff6b6b">[${new Date().toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${user}:</span> ${text}`;
+            msg.innerHTML = `<span style="color: #ff6b6b">[${new Date(time).toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${user}:</span> ${text}`;
             messages.appendChild(msg);
             messages.scrollTop = messages.scrollHeight;
         }
@@ -116,7 +116,7 @@
             const chatKey = `chat_${roomId}`;
             const chatData = JSON.parse(localStorage.getItem(chatKey) || '[]');
             chatData.forEach(msg => {
-                addMessage(msg.user, msg.text, msg.type);
+                addMessage(msg.user, msg.text, msg.type, msg.time);
             });
         }
         
