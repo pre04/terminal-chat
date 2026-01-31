@@ -35,7 +35,26 @@
         .message {
             margin: 5px 0;
             word-wrap: break-word;
+            cursor: pointer;
         }
+        .message:hover { background: #111; }
+        .reactions { font-size: 14px; margin-left: 10px; }
+        .reactions span { margin-right: 5px; cursor: pointer; }
+        .reactions span:hover { transform: scale(1.2); display: inline-block; }
+        #emoji-picker {
+            display: none;
+            position: fixed;
+            bottom: 60px;
+            left: 10px;
+            background: #111;
+            border: 1px solid #00ff00;
+            padding: 10px;
+            font-size: 20px;
+            max-width: 280px;
+            z-index: 100;
+        }
+        #emoji-picker span { cursor: pointer; margin: 3px; display: inline-block; }
+        #emoji-picker span:hover { transform: scale(1.3); }
         .user { color: #00ffff; }
         .system { color: #ffff00; }
         #input-line {
@@ -68,6 +87,7 @@
     <div id="terminal">
         <div id="header">Terminal Chat v2.5 - Local demo | For real chat, need backend server</div>
         <div id="messages"></div>
+        <div id="emoji-picker"></div>
         <div id="input-line">
             <span id="prompt">guest@chat:~$</span>
             <input type="text" id="input" placeholder="Type message..." autofocus>
@@ -79,6 +99,12 @@
         const messages = document.getElementById('messages');
         const input = document.getElementById('input');
         const prompt = document.getElementById('prompt');
+        const emojiPicker = document.getElementById('emoji-picker');
+        
+        const emojis = ['😀','😂','😍','🥺','😢','😡','👍','👎','❤️','🔥','🎉','💯','👀','🙏','💀','✨'];
+        emojiPicker.innerHTML = emojis.map(e => `<span onclick="insertEmoji('${e}')">${e}</span>`).join('');
+        
+        let messageReactions = JSON.parse(localStorage.getItem('reactions_' + location.search) || '{}');
         
         let username = localStorage.getItem('chat_username') || 'guest';
         let roomId = new URLSearchParams(window.location.search).get('room') || generateRoomId();
@@ -92,12 +118,51 @@
             return id;
         }
         
-        function addMessage(user, text, type = 'user', time = Date.now()) {
+        function addMessage(user, text, type = 'user', time = Date.now(), msgId = null) {
+            const id = msgId || 'msg_' + time;
             const msg = document.createElement('div');
             msg.className = `message ${type}`;
-            msg.innerHTML = `<span style="color: #ff6b6b">[${new Date(time).toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${user}:</span> ${text}`;
+            msg.dataset.id = id;
+            const reactions = messageReactions[id] || [];
+            const reactionsHtml = reactions.length ? `<span class="reactions">${reactions.join('')}</span>` : '';
+            msg.innerHTML = `<span style="color: #ff6b6b">[${new Date(time).toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${user}:</span> ${text}${reactionsHtml}`;
+            msg.onclick = () => showReactionPicker(id);
             messages.appendChild(msg);
             messages.scrollTop = messages.scrollHeight;
+        }
+        
+        function showReactionPicker(msgId) {
+            const quickEmojis = ['👍','❤️','😂','😮','😢','🔥'];
+            const picker = document.createElement('div');
+            picker.style.cssText = 'position:fixed;bottom:60px;left:10px;background:#111;border:1px solid #00ff00;padding:5px;font-size:20px;z-index:100;';
+            picker.innerHTML = quickEmojis.map(e => `<span style="cursor:pointer;margin:3px">${e}</span>`).join('') + '<span style="cursor:pointer;margin:3px;color:#ff6b6b">✕</span>';
+            picker.onclick = (e) => {
+                if (e.target.tagName === 'SPAN' && e.target.textContent !== '✕') {
+                    addReaction(msgId, e.target.textContent);
+                }
+                picker.remove();
+            };
+            document.body.appendChild(picker);
+        }
+        
+        function addReaction(msgId, emoji) {
+            if (!messageReactions[msgId]) messageReactions[msgId] = [];
+            messageReactions[msgId].push(emoji);
+            localStorage.setItem('reactions_' + location.search, JSON.stringify(messageReactions));
+            refreshMessages();
+        }
+        
+        function refreshMessages() {
+            const chatKey = `chat_${roomId}`;
+            const chatData = JSON.parse(localStorage.getItem(chatKey) || '[]');
+            messages.innerHTML = '';
+            chatData.forEach(msg => addMessage(msg.user, msg.text, msg.type, msg.time, 'msg_' + msg.time));
+        }
+        
+        function insertEmoji(emoji) {
+            input.value += emoji;
+            emojiPicker.style.display = 'none';
+            input.focus();
         }
         
         function saveToLocal(user, text, type = 'user', time = Date.now()) {
@@ -173,8 +238,10 @@
                     addMessage('system', `Current room: ${roomId}`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
                 } else if (text === '/help') {
-                    addMessage('system', 'Commands: /nick <name>, /clear, /room, /help', 'system');
-                    addMessage('system', 'Note: This is a demo - messages are stored locally only', 'system');
+                    addMessage('system', 'Commands: /nick <name>, /clear, /room, /emoji, /help', 'system');
+                    addMessage('system', 'Tap a message to add reaction. Emojis work in messages.', 'system');
+                } else if (text === '/emoji') {
+                    emojiPicker.style.display = emojiPicker.style.display === 'block' ? 'none' : 'block';
                 } else {
                     await sendMessage(username, text);
                 }
@@ -190,7 +257,7 @@
         addMessage('system', `Room: ${roomId} | Demo chat (local storage only)`, 'system');
         addMessage('system', `Share URL: ${window.location.href}`, 'system');
         addMessage('system', 'Note: For real cross-device chat, you need a backend server', 'system');
-        addMessage('system', 'Commands: /nick <name>, /clear, /room, /help', 'system');
+        addMessage('system', 'Commands: /nick <name>, /clear, /room, /emoji, /help', 'system');
     </script>
 </body>
 </html>
