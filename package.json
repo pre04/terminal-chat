@@ -8,6 +8,6 @@
     "deploy": "surge . --domain terminal-chat-$(whoami).surge.sh"
   },
   "keywords": ["chat", "terminal", "retro", "messaging"],
-  "author": "Your Name",
+  "author": "pratibhk",
   "license": "MIT"
 }
