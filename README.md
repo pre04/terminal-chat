@@ -26,3 +26,6 @@ A minimal terminal-style chat application with real-time messaging and unique ro
 - Friends using the same URL join the same chat room
 - Messages are shared in real-time via WebSocket
 - No registration required - just share the URL!
+
+## Author
+pratibhk
