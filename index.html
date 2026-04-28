@@ -57,6 +57,23 @@
         #emoji-picker span:hover { transform: scale(1.3); }
         .user { color: #00ffff; }
         .system { color: #ffff00; }
+        /* Color classes for all 16 user colors, matching the server app palette */
+        .color-green { color: #00ff00 !important; }
+        .color-cyan { color: #00ffff !important; }
+        .color-yellow { color: #ffff00 !important; }
+        .color-magenta { color: #ff00ff !important; }
+        .color-red { color: #ff6b6b !important; }
+        .color-blue { color: #6b9eff !important; }
+        .color-orange { color: #ffa500 !important; }
+        .color-purple { color: #9966cc !important; }
+        .color-white { color: #ffffff !important; }
+        .color-pink { color: #ff69b4 !important; }
+        .color-lime { color: #32cd32 !important; }
+        .color-teal { color: #2dd4bf !important; }
+        .color-gold { color: #ffd700 !important; }
+        .color-coral { color: #ff7f50 !important; }
+        .color-lavender { color: #b380ff !important; }
+        .color-silver { color: #c0c0c0 !important; }
         #input-line {
             display: flex;
             align-items: center;
@@ -107,6 +124,10 @@
         let messageReactions = JSON.parse(localStorage.getItem('reactions_' + location.search) || '{}');
         
         let username = localStorage.getItem('chat_username') || 'guest';
+        // User color preference, persisted in localStorage for cross-session consistency
+        let userColor = localStorage.getItem('chat_color') || 'cyan';
+        // All 16 available colors, matching the server app palette
+        const USER_COLORS = ['green', 'cyan', 'yellow', 'magenta', 'red', 'blue', 'orange', 'purple', 'white', 'pink', 'lime', 'teal', 'gold', 'coral', 'lavender', 'silver'];
         let roomId = new URLSearchParams(window.location.search).get('room') || generateRoomId();
         
         // Set initial username
@@ -123,6 +144,10 @@
             const msg = document.createElement('div');
             msg.className = `message ${type}`;
             msg.dataset.id = id;
+            // Apply the user's chosen color class to user messages
+            if (type === 'user' && user === username) {
+                msg.classList.add(`color-${userColor}`);
+            }
             const reactions = messageReactions[id] || [];
             const reactionsHtml = reactions.length ? `<span class="reactions">${reactions.join('')}</span>` : '';
             msg.innerHTML = `<span style="color: #ff6b6b">[${new Date(time).toLocaleTimeString()}]</span> <span style="color: #4ecdc4">${user}:</span> ${text}${reactionsHtml}`;
@@ -230,6 +255,16 @@
                     localStorage.setItem('chat_username', username);
                     prompt.textContent = `${username}@chat:~$`;
                     await sendMessage('system', `${username} joined the chat`, 'system');
+                } else if (text.startsWith('/color ')) {
+                    // /color command: change the user's display color and persist to localStorage
+                    const newColor = text.substring(7).toLowerCase();
+                    if (USER_COLORS.includes(newColor)) {
+                        userColor = newColor;
+                        localStorage.setItem('chat_color', userColor);
+                        addMessage('system', `Color changed to ${newColor}`, 'system');
+                    } else {
+                        addMessage('system', `Available colors: ${USER_COLORS.join(', ')}`, 'system');
+                    }
                 } else if (text === '/clear') {
                     messages.innerHTML = '';
                     addMessage('system', `Room: ${roomId} | Share URL to chat`, 'system');
@@ -238,8 +273,10 @@
                     addMessage('system', `Current room: ${roomId}`, 'system');
                     addMessage('system', `Share URL: ${window.location.href}`, 'system');
                 } else if (text === '/help') {
-                    addMessage('system', 'Commands: /nick <name>, /clear, /room, /emoji, /help', 'system');
+                    addMessage('system', 'Commands: /nick <name>, /color <color>, /clear, /room, /emoji, /help', 'system');
                     addMessage('system', 'Tap a message to add reaction. Emojis work in messages.', 'system');
+                    // Dynamically list all available colors so help stays in sync with USER_COLORS
+                    addMessage('system', 'Colors: ' + USER_COLORS.join(', '), 'system');
                 } else if (text === '/emoji') {
                     emojiPicker.style.display = emojiPicker.style.display === 'block' ? 'none' : 'block';
                 } else {
@@ -257,7 +294,7 @@
         addMessage('system', `Room: ${roomId} | Demo chat (local storage only)`, 'system');
         addMessage('system', `Share URL: ${window.location.href}`, 'system');
         addMessage('system', 'Note: For real cross-device chat, you need a backend server', 'system');
-        addMessage('system', 'Commands: /nick <name>, /clear, /room, /emoji, /help', 'system');
+        addMessage('system', 'Commands: /nick <name>, /color <color>, /clear, /room, /emoji, /help', 'system');
     </script>
 </body>
 </html>
